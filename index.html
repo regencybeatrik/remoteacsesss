@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Device Dashboard</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: Arial, sans-serif; }
+        body { background: #0b0b0b; display: flex; justify-content: center; align-items: center; height: 100vh; color: #fff; }
+        .container { width: 380px; background: #1a1a1a; border-radius: 20px; padding: 20px; box-shadow: 0 0 30px rgba(0,255,200,0.1); }
+        .hidden { display: none; }
+        #dashboard { text-align: center; }
+        #dashboard h1 { color: #00ffc8; margin-bottom: 6px; }
+        .sub { color: #666; font-size: 13px; margin-bottom: 15px; }
+        .device-id-box { background: #0d0d0d; padding: 12px; border-radius: 10px; border: 1px solid #2a2a2a; margin-bottom: 15px; }
+        .device-id-box .label { color: #888; font-size: 12px; }
+        .device-id-box .id-value { color: #ffd700; font-size: 22px; font-weight: bold; letter-spacing: 2px; }
+        .empty-device { padding: 40px 0; color: #555; font-size: 14px; border: 2px dashed #333; border-radius: 12px; }
+        .device-item { background: #222; padding: 15px; border-radius: 10px; margin: 10px 0; cursor: pointer; border: 1px solid #00ffc8; transition: 0.3s; display: flex; justify-content: space-between; align-items: center; }
+        .device-item:hover { background: #2a2a2a; box-shadow: 0 0 20px rgba(0,255,200,0.1); }
+        .device-item .name { font-size: 16px; font-weight: 500; }
+        .device-item .badge { color: #00ffc8; font-size: 20px; }
+        #controlPanel { text-align: center; }
+        #controlPanel h2 { color: #00ffc8; margin-bottom: 15px; }
+        .btn-group { display: flex; flex-direction: column; gap: 10px; }
+        .btn-group button { background: #2a2a2a; border: 1px solid #333; color: #fff; padding: 14px; border-radius: 10px; font-size: 15px; cursor: pointer; transition: 0.3s; }
+        .btn-group button:hover { background: #00ffc8; color: #000; border-color: #00ffc8; }
+        #cameraFeed { width: 100%; height: 200px; background: #111; border-radius: 10px; margin: 10px 0; border: 1px solid #333; object-fit: cover; }
+        #galleryPreview img { width: 100%; max-height: 150px; object-fit: cover; border-radius: 8px; margin-top: 10px; border: 1px solid #333; }
+        .back-btn { background: #444; border: none; color: #fff; padding: 10px; border-radius: 8px; cursor: pointer; margin-top: 15px; width: 100%; }
+        .back-btn:hover { background: #555; }
+        #statusText { color: #00ffc8; font-size: 12px; margin-top: 10px; }
+        .device-available { border-color: #00ffc8; background: #1a2a1a; }
+        .status-connected { color: #00ffc8; }
+        .status-disconnected { color: #ff4444; }
+        .refresh-id { background: #2a2a2a; border: none; color: #aaa; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 11px; margin-top: 6px; }
+        .refresh-id:hover { background: #3a3a3a; color: #fff; }
+        .error-404 { border-color: #ff4444 !important; color: #ff4444 !important; }
+    </style>
+</head>
+<body>
+<div class="container" id="app">
+    <div id="dashboard">
+        <h1>📱 DEVICE DASHBOARD</h1>
+        <div class="sub">Hubungkan perangkat Anda</div>
+
+        <div class="device-id-box">
+            <div class="label">🔑 ID DEVICE DASHBOARD</div>
+            <div class="id-value" id="deviceIdDisplay">---</div>
+            <button class="refresh-id" id="refreshIdBtn">🔄 GENERATE ULANG</button>
+        </div>
+
+        <div id="deviceList">
+            <div class="empty-device" id="emptyDevice">⚠️ BELUM ADA DEVICE<br><span style="font-size:12px;color:#777;">Login melalui PHISING</span></div>
+        </div>
+        <div style="margin-top:15px;font-size:12px;color:#444;" id="connectionStatus">🔐 STATUS: <span id="statusLabel" class="status-disconnected">DISCONNECTED</span></div>
+    </div>
+
+    <div id="controlPanel" class="hidden">
+        <h2>🎮 CONTROL - HP JYAH</h2>
+        <video id="cameraFeed" autoplay></video>
+        <div class="btn-group">
+            <button id="startCamBtn">📷 HIDUPKAN KAMERA</button>
+            <button id="captureBtn">📸 AMBIL POTO</button>
+            <button id="recordBtn">🔴 REKAM (DIAM-DIAM)</button>
+            <button id="galleryBtn">🖼️ AMBIL POTO DARI GALERI</button>
+        </div>
+        <div id="galleryPreview"></div>
+        <button class="back-btn" id="backToDashBtn">⬅️ KEMBALI KE DASHBOARD</button>
+        <div id="statusText">STATUS: SIAP</div>
+    </div>
+</div>
+
+<script>
+    const dashboard = document.getElementById('dashboard');
+    const controlPanel = document.getElementById('controlPanel');
+    const deviceList = document.getElementById('deviceList');
+    const backBtn = document.getElementById('backToDashBtn');
+    const startCamBtn = document.getElementById('startCamBtn');
+    const captureBtn = document.getElementById('captureBtn');
+    const recordBtn = document.getElementById('recordBtn');
+    const galleryBtn = document.getElementById('galleryBtn');
+    const cameraFeed = document.getElementById('cameraFeed');
+    const galleryPreview = document.getElementById('galleryPreview');
+    const statusText = document.getElementById('statusText');
+    const statusLabel = document.getElementById('statusLabel');
+    const deviceIdDisplay = document.getElementById('deviceIdDisplay');
+    const refreshIdBtn = document.getElementById('refreshIdBtn');
+
+    let stream = null;
+    let mediaRecorder = null;
+    let recordedChunks = [];
+    let isRecording = false;
+    let currentDeviceId = '';
+
+    function generateRandomId() {
+        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+        let result = 'DASH-';
+        for (let i = 0; i < 5; i++) {
+            result += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+        return result;
+    }
+
+    function setNewDeviceId() {
+        currentDeviceId = generateRandomId();
+        deviceIdDisplay.textContent = currentDeviceId;
+
+        deviceList.innerHTML = `
+            <div class="empty-device" id="emptyDevice">⚠️ BELUM ADA DEVICE<br><span style="font-size:12px;color:#777;">Login melalui PHISING</span></div>
+        `;
+        statusLabel.innerText = 'DISCONNECTED';
+        statusLabel.className = 'status-disconnected';
+        statusText.innerText = '⏳ ID BARU! LOGIN MELALUI PHISING';
+        
+        const url = new URL(window.location);
+        url.searchParams.delete('id');
+        window.history.replaceState({}, '', url);
+    }
+
+    setNewDeviceId();
+
+    refreshIdBtn.addEventListener('click', function() {
+        setNewDeviceId();
+    });
+
+    // CEK ID DARI URL (dari redirect phising)
+    const urlParams = new URLSearchParams(window.location.search);
+    const inputId = urlParams.get('id');
+
+    if (inputId) {
+        if (inputId === currentDeviceId) {
+            // ID COCOK → MUNCUL DEVICE
+            deviceList.innerHTML = `
+                <div class="device-item device-available" id="deviceHp">
+                    <span class="name">📱 HP JYAH</span>
+                    <span class="badge">▶</span>
+                </div>
+            `;
+            statusLabel.innerText = 'CONNECTED ✅';
+            statusLabel.className = 'status-connected';
+            statusText.innerText = '✅ DEVICE TERHUBUNG! ID COCOK.';
+            document.querySelector('#dashboard .empty-device')?.remove();
+
+            document.getElementById('deviceHp').addEventListener('click', function() {
+                dashboard.classList.add('hidden');
+                controlPanel.classList.remove('hidden');
+                statusText.innerText = '📱 CONTROL PANEL AKTIF';
+            });
+        } else {
+            // ID SALAH → 404
+            deviceList.innerHTML = `
+                <div class="empty-device error-404">
+                    ❌ ERROR 404<br>
+                    <span style="font-size:12px;color:#777;">ID DEVICE TIDAK DIKENAL</span>
+                </div>
+            `;
+            statusLabel.innerText = 'ERROR 404 ❌';
+            statusLabel.className = 'status-disconnected';
+            statusText.innerText = '⚠️ ID SALAH! CEK ID DASHBOARD.';
+        }
+    }
+
+    backBtn.addEventListener('click', function() {
+        controlPanel.classList.add('hidden');
+        dashboard.classList.remove('hidden');
+        if (stream) {
+            stream.getTracks().forEach(track => track.stop());
+            stream = null;
+            cameraFeed.srcObject = null;
+        }
+        if (mediaRecorder && isRecording) {
+            mediaRecorder.stop();
+            isRecording = false;
+        }
+        statusText.innerText = '🔙 KEMBALI KE DASHBOARD';
+    });
+
+    startCamBtn.addEventListener('click', async function() {
+        try {
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+                stream = null;
+            }
+            stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: true });
+            cameraFeed.srcObject = stream;
+            statusText.innerText = '📷 KAMERA AKTIF';
+        } catch (err) {
+            statusText.innerText = '❌ GAGAL AKSES KAMERA: ' + err.message;
+        }
+    });
+
+    captureBtn.addEventListener('click', function() {
+        if (!stream) {
+            statusText.innerText = '⚠️ HIDUPKAN KAMERA DULU!';
+            return;
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = cameraFeed.videoWidth;
+        canvas.height = cameraFeed.videoHeight;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(cameraFeed, 0, 0);
+        const link = document.createElement('a');
+        link.download = 'foto_' + Date.now() + '.png';
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+        statusText.innerText = '📸 FOTO TERSIMPAN!';
+    });
+
+    recordBtn.addEventListener('click', function() {
+        if (!stream) {
+            statusText.innerText = '⚠️ HIDUPKAN KAMERA DULU!';
+            return;
+        }
+        if (isRecording) {
+            mediaRecorder.stop();
+            isRecording = false;
+            recordBtn.innerText = '🔴 REKAM (DIAM-DIAM)';
+            statusText.innerText = '⏹️ REKAMAN BERHENTI';
+            return;
+        }
+        recordedChunks = [];
+        mediaRecorder = new MediaRecorder(stream);
+        mediaRecorder.ondataavailable = function(e) {
+            if (e.data.size > 0) recordedChunks.push(e.data);
+        };
+        mediaRecorder.onstop = function() {
+            const blob = new Blob(recordedChunks, { type: 'video/mp4' });
+            const link = document.createElement('a');
+            link.download = 'rekaman_' + Date.now() + '.mp4';
+            link.href = URL.createObjectURL(blob);
+            link.click();
+            recordedChunks = [];
+            statusText.innerText = '💾 REKAMAN TERSIMPAN!';
+        };
+        mediaRecorder.start();
+        isRecording = true;
+        recordBtn.innerText = '⏹️ BERHENTI REKAM';
+        statusText.innerText = '🔴 REKAMAN BERJALAN...';
+    });
+
+    galleryBtn.addEventListener('click', function() {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'image/*';
+        input.onchange = function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(ev) {
+                    galleryPreview.innerHTML = `<img src="${ev.target.result}" alt="dari galeri">`;
+                    statusText.innerText = '🖼️ POTO DARI GALERI';
+                };
+                reader.readAsDataURL(file);
+            }
+        };
+        input.click();
+    });
+</script>
+</body>
+</html>
